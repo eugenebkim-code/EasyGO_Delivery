@@ -2360,8 +2360,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     if data == "courier:orders":
-        await handle_courier_orders(query, context)
-        return
+        # если есть активный заказ — показываем только его
+        active = get_active_order_for_courier(uid)
+        if active:
+            context.user_data.pop(UI_MSG_ID_KEY, None)
+            await render_active_order_screen(query, context, active)
+            return
 
     if data == "start:go":
         await ui_render(

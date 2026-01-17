@@ -2367,6 +2367,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await render_active_order_screen(query, context, active)
             return
 
+        # иначе — показываем список заявок
+        await show_current_orders_for_courier(context, uid)
+        return
+
     if data == "start:go":
         await ui_render(
             context,
@@ -2489,7 +2493,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🔄 ОБНОВЛЕНИЕ ЭКРАНА КУРЬЕРА
     if data == "courier_refresh":
-        await handle_courier_orders(query, context)
+        await show_current_orders_for_courier(context, uid)
         return
 
     if data == "courier:stats":

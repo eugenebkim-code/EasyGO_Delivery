@@ -190,10 +190,16 @@ async def tg_retry(call, tries: int = 6, base_sleep: float = 0.7):
 # ONE-MESSAGE UI CORE
 # =========================
 UI_MSG_ID_KEY = "ui_msg_id"
+UI_RESET_KEY = "ui_reset_in_progress"
 
 from telegram.error import BadRequest
 
-async def ui_render(context, chat_id: int, text: str, reply_markup=None):
+async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
+    # 🔒 если идет reset — НИКТО не рисует UI
+    if context.user_data.get(UI_RESET_KEY):
+        log.info("UI_RENDER SKIPPED (reset in progress)")
+        return
+
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
 
     if msg_id:
@@ -203,12 +209,12 @@ async def ui_render(context, chat_id: int, text: str, reply_markup=None):
                 message_id=msg_id,
                 text=text,
                 reply_markup=reply_markup,
+                **kwargs
             )
             return
-        except BadRequest as e:
-            log.warning("UI edit failed, fallback to send: %s", e)
+        except BadRequest:
             context.user_data.pop(UI_MSG_ID_KEY, None)
-        except Exception as e:
+        except Exception:
             log.exception("Unexpected UI edit error")
             context.user_data.pop(UI_MSG_ID_KEY, None)
 
@@ -216,6 +222,7 @@ async def ui_render(context, chat_id: int, text: str, reply_markup=None):
         chat_id=chat_id,
         text=text,
         reply_markup=reply_markup,
+        **kwargs
     )
     context.user_data[UI_MSG_ID_KEY] = msg.message_id
 
@@ -1220,14 +1227,21 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    # 1) полный сброс состояния
+    # 🔒 БЛОКИРУЕМ ВСЕ UI
+    context.user_data[UI_RESET_KEY] = True
+
+    # 💣 ПОЛНЫЙ СБРОС
     context.user_data.clear()
     init_user_defaults(context)
+    context.user_data.pop(UI_MSG_ID_KEY, None)
 
-    # 2) гарантированно рисуем экран сразу
+    # ✅ ГАРАНТИРОВАННЫЙ ОДИН РЕНДЕР
     await render_home_root(context, chat.id)
 
-    # 3) любое IO - после UI, и с защитой
+    # 🔓 РАЗБЛОК
+    context.user_data.pop(UI_RESET_KEY, None)
+
+    # 📝 логируем ПОСЛЕ
     if SHEETS and user:
         async def _log():
             try:
@@ -1241,6 +1255,7 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 SHEETS.log_event(user.id, ROLE_UNKNOWN, "START_CMD")
             except Exception as e:
                 log.warning("START log failed: %s", e)
+
         asyncio.create_task(_log())
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2250,6 +2265,9 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    if context.user_data.get(UI_RESET_KEY):
+        await query.answer("Обновление…")
+        return
 
     query = update.callback_query
     if not query:
@@ -2852,6 +2870,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MESSAGE HANDLER
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    if context.user_data.get(UI_RESET_KEY):
+        log.info("MESSAGE IGNORED (reset in progress)")
+        return
+    
     if not update.effective_user or not update.message:
         return
 

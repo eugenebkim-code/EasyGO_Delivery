@@ -1917,7 +1917,7 @@ async def handle_proof_photo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "✅ Заказ завершен.\n\n🛵 Меню курьера:",
         reply_markup=kb_courier_menu_approved(uid)
     )
-    text = text.strip() if text and text.strip() else " "
+    
     # уведомляем клиента
     try:
         await tg_retry(lambda: context.bot.send_photo(

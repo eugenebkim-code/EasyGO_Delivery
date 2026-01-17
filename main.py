@@ -1252,37 +1252,42 @@ async def handle_courier_orders(query, context: ContextTypes.DEFAULT_TYPE):
         await ui_render(context, uid, "Нет доступа.")
         return
 
+    # 🔑 если есть активный заказ — ТОЛЬКО ОН
     active = get_active_order_for_courier(uid)
     if active:
-        await ui_render(
-            context,
-            uid,
-            "📦 У вас уже есть активный заказ.",
-            reply_markup=kb_active_order()
-        )
+        context.user_data.pop(UI_MSG_ID_KEY, None)
+        await render_active_order_screen(query, context, active)
         return
 
+    # 🔑 берем ОДИН следующий заказ
     orders = [o for o in ORDERS.values() if o.status == ORDER_NEW]
 
     if not orders:
-        await ui_render(context, uid, "📭 Сейчас нет доступных заказов.")
+        await ui_render(
+            context,
+            uid,
+            "📭 Сейчас нет доступных заказов.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Обновить", callback_data="courier_refresh")],
+                [InlineKeyboardButton("🏠 Выйти", callback_data="go_start")]
+            ])
+        )
         return
 
     orders.sort(key=lambda o: int(o.order_id), reverse=True)
+    order = orders[0]
 
-    # ❗ важно: не через ui_render, а обычные send_message
-    await tg_retry(lambda: context.bot.send_message(
-        chat_id=uid,
-        text="📋 Доступные заказы:"
-    ))
-
-    for o in orders[:20]:
-        await tg_retry(lambda order=o: context.bot.send_message(
-            chat_id=uid,
-            text=render_order_offer_text(order),
-            reply_markup=kb_order_offer(order),
-            parse_mode="Markdown",
-        ))
+    await ui_render(
+        context,
+        uid,
+        render_order_offer_text(order),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🤝 Взять заказ", callback_data=f"take:{order.order_id}")],
+            [InlineKeyboardButton("🔄 Обновить", callback_data="courier_refresh")],
+            [InlineKeyboardButton("🏠 Выйти", callback_data="go_start")]
+        ]),
+        parse_mode="Markdown",
+    )
 
 async def _send_courier_naver_warning_once(context: ContextTypes.DEFAULT_TYPE, courier_id: int):
     # минимальный текст, один раз
@@ -1644,6 +1649,9 @@ async def handle_take_order(query, context: ContextTypes.DEFAULT_TYPE, courier_i
                 "ORDER_TAKEN",
                 order_id=order_id
             )
+
+    # 🔑 ВОТ ЭТА СТРОКА — КРИТИЧЕСКАЯ
+    context.user_data.pop(UI_MSG_ID_KEY, None)
 
     # ✅ один-единственный UI render
     await ui_render(
@@ -2418,6 +2426,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("picked:"):
         order_id = data.split(":", 1)[1]
         await handle_picked_up(query, context, uid, order_id)
+        return
+
+    # 🔄 ОБНОВЛЕНИЕ ЭКРАНА КУРЬЕРА
+    if data == "courier_refresh":
+        await handle_courier_orders(query, context)
         return
 
     if data == "courier:stats":

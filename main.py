@@ -3321,8 +3321,9 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
-    asyncio.get_event_loop().run_until_complete(
-        app.bot.delete_webhook(drop_pending_updates=True)
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
     )
 
     async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):

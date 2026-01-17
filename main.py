@@ -2243,6 +2243,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_role = context.user_data.get(USER_ROLE_KEY, ROLE_UNKNOWN)
     data = query.data or ""
 
+    if CLIENT_STATE_KEY not in context.user_data:
+        await query.answer("Сессия обновлена. Нажмите /start", show_alert=False)
+        return
 
     # ===== HOME SCREENS =====
 

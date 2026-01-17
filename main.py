@@ -68,6 +68,7 @@ log = logging.getLogger("easygo_delivery")
 # =========================
 # CONFIG
 # =========================
+START_LOCK_KEY = "_start_lock"
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SHEET_ID = os.getenv("SHEET_ID", "").strip()
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "").strip()
@@ -196,6 +197,9 @@ from telegram.error import BadRequest
 
 async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
+
+    if context.user_data.get(START_LOCK_KEY):
+        return
 
     if msg_id:
         try:
@@ -1221,10 +1225,28 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
+    # 🔒 блокируем все остальные апдейты
     context.user_data.clear()
-    context.user_data[UI_MSG_ID_KEY] = None
+    context.user_data[START_LOCK_KEY] = True
 
-    await render_home_root(context, chat_id)
+    # ❌ полностью рвем старый UI
+    context.user_data.pop(UI_MSG_ID_KEY, None)
+
+    # 🧼 чистый старт
+    init_user_defaults(context)
+
+    # ✅ РИСУЕМ ТОЛЬКО НОВОЕ СООБЩЕНИЕ
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=HOME_TEXT,
+        reply_markup=kb_home_root()
+    )
+
+    # сохраняем ТОЛЬКО этот msg_id
+    context.user_data[UI_MSG_ID_KEY] = msg.message_id
+
+    # 🔓 снимаем блок
+    context.user_data.pop(START_LOCK_KEY, None)
 
     
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2234,6 +2256,9 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    if context.user_data.get(START_LOCK_KEY):
+        return
+
     if context.user_data.get(UI_RESET_KEY):
         await query.answer("Обновление…")
         return
@@ -2839,6 +2864,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MESSAGE HANDLER
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    if context.user_data.get(START_LOCK_KEY):
+        return
     
     if context.user_data.get(UI_RESET_KEY):
         log.info("MESSAGE IGNORED (reset in progress)")

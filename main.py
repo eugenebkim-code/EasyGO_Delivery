@@ -1211,22 +1211,33 @@ def init_user_defaults(context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
+    user = update.effective_user
 
-    # полный жесткий сброс
-    context.user_data.clear()
+    # 1️⃣ сбрасываем ТОЛЬКО UI-сообщение
+    context.user_data.pop(UI_MSG_ID_KEY, None)
+
+    # 2️⃣ переинициализируем дефолты
     init_user_defaults(context)
 
-    if SHEETS and update.effective_user:
-        SHEETS.log_visit(
-            user_tg_id=update.effective_user.id,
-            username=update.effective_user.username or "",
-            role=ROLE_UNKNOWN,
-            location="",
-            event="START",
-        )
-        SHEETS.log_event(update.effective_user.id, ROLE_UNKNOWN, "START_CMD")
-
+    # 3️⃣ сразу рисуем главный экран
     await render_home_root(context, chat.id)
+
+    # 4️⃣ все побочное логирование — в фоне
+    if SHEETS and user:
+        async def _log_start():
+            try:
+                SHEETS.log_visit(
+                    user_tg_id=user.id,
+                    username=user.username or "",
+                    role=ROLE_UNKNOWN,
+                    location="",
+                    event="START",
+                )
+                SHEETS.log_event(user.id, ROLE_UNKNOWN, "START_CMD")
+            except Exception as e:
+                log.warning("START logging failed: %s", e)
+
+        asyncio.create_task(_log_start())
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin(update.effective_user.id):

@@ -126,7 +126,6 @@ C_TYPE = "C_TYPE"
 C_TYPE_OTHER = "C_TYPE_OTHER"
 C_TIME = "C_TIME"
 C_TIME_CUSTOM = "C_TIME_CUSTOM"
-C_CONTACT = "C_CONTACT"
 C_CONFIRM = "C_CONFIRM"
 
 
@@ -2836,11 +2835,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ---- CONFIRM ----
         d = context.user_data.get("draft_order", {})
 
-        # Dunpo — фиксированная цена
-        if d.get("zone") == "dunpo":
-            d["price_krw"] = DEFAULT_PRICE_KRW
-            context.user_data["draft_order"] = d
-
         price = int(d.get("price_krw") or 0)
         if price <= 0:
             context.user_data[CLIENT_STATE_KEY] = C_NONE
@@ -3293,67 +3287,6 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 SHEETS.log_event(uid, ROLE_CLIENT, "ORDER_STEP_TIME_CUSTOM_TEXT")
 
             await ui_render(context, uid, "Введите ваше имя.")
-            return
-
-        if S_client == C_CONTACT:
-            if not text:
-                await ui_render(
-                    context,
-                    update.effective_chat.id,
-                    "Укажите контакт получателя.\nИмя и телефон или Telegram."
-                )
-                return
-
-            d["recipient_contact_text"] = text
-            context.user_data["draft_order"] = d
-
-            # Dunpo — сразу подтверждение
-            if d.get("zone") == "dunpo":
-                d["price_krw"] = DEFAULT_PRICE_KRW
-                context.user_data["draft_order"] = d
-                context.user_data[CLIENT_STATE_KEY] = C_CONFIRM
-
-                # 🔑 ЖЕСТКО РВЕМ СТАРЫЙ UI
-                context.user_data.pop(UI_MSG_ID_KEY, None)
-
-                await ui_render(
-                    context,
-                    uid,
-                    render_order_summary_for_confirm(d),
-                    reply_markup=kb_confirm_order()
-                )
-                return
-
-            # Other районы - сначала показываем рекомендованную цену
-            recommended = await calc_recommended_price_krw(
-                d.get("pickup_address_ko", ""),
-                d.get("drop_address_ko", "")
-            )
-
-            if recommended:
-                d["recommended_price_krw"] = recommended
-                context.user_data["draft_order"] = d
-                context.user_data[CLIENT_STATE_KEY] = C_PRICE_RECOMMEND
-
-                await ui_render(
-                    context,
-                    uid,
-                    (
-                        f"💰 Рекомендованная цена: {recommended} ~вон\n"
-                        f"(расчет: {PRICE_PER_KM_KRW} вон за км)\n\n"
-                        "Принять эту цену или ввести свою?"
-                    ),
-                    reply_markup=kb_client_price_recommend()
-                )
-                return
-
-            # fallback - как было раньше
-            context.user_data[CLIENT_STATE_KEY] = C_PRICE_FINAL
-            await ui_render(
-                context,
-                uid,
-                "💰 Не удалось рассчитать маршрут. Укажите цену вручную (в вонах)."
-            )
             return
         
     # если мы здесь — просто игнорируем

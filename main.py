@@ -34,7 +34,6 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
-import asyncio
 from telegram.error import Conflict
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -1097,7 +1096,7 @@ def render_order_offer_text(order: Order) -> str:
         f"🕒 Время: {tline}\n"
         f"💰 Цена: {order.price_krw} вон\n\n"
         f"📍 Адрес забора:\n{order.pickup_address_ko}\n\n"
-        f"🏁 Адрес доставки:\n`{order.drop_address_ko}`"
+        f"🏁 Адрес доставки:\n{order.drop_address_ko}"
     )
 
 
@@ -1108,7 +1107,7 @@ def render_order_taken_text(order: Order) -> str:
         f"📦 Заказ #{order.order_id}\n"
         f"💰 Цена: {order.price_krw} вон\n\n"
         f"📍 Адрес забора:\n{order.pickup_address_ko}\n\n"
-        f"🏁 Адрес доставки:\n`{order.drop_address_ko}`\n\n"
+        f"🏁 Адрес доставки:\n{order.drop_address_ko}\n\n"
         f"🔒 Код подъезда:\n{door}\n\n"
         f"📞 Контакт:\n{order.recipient_contact_text}\n\n"
         "Свяжитесь с клиентом и уточните детали.\n"
@@ -1238,6 +1237,12 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data[START_LOCK_KEY] = True
 
+    try:
+        msg = await context.bot.send_message(...)
+        context.user_data[UI_MSG_ID_KEY] = msg.message_id
+    finally:
+        context.user_data.pop(START_LOCK_KEY, None)
+
     # ❌ полностью рвем старый UI
     context.user_data.pop(UI_MSG_ID_KEY, None)
 
@@ -1320,7 +1325,7 @@ async def handle_courier_orders(query, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🔄 Обновить", callback_data="courier_refresh")],
             [InlineKeyboardButton("🏠 Выйти", callback_data="go_start")]
         ]),
-        parse_mode="Markdown",
+        
     )
 
 async def _send_courier_naver_warning_once(context: ContextTypes.DEFAULT_TYPE, courier_id: int):
@@ -1361,7 +1366,7 @@ async def notify_new_order(context: ContextTypes.DEFAULT_TYPE, order: Order):
                 chat_id=ccid,
                 text=text,
                 reply_markup=kb_order_offer(order),
-                parse_mode="Markdown",
+                
             ))
         except Exception as e:
             log.warning("Courier notify failed: %s", e)
@@ -1538,7 +1543,7 @@ async def show_current_orders_for_courier(context: ContextTypes.DEFAULT_TYPE, ch
                 chat_id=chat_id,
                 text=render_order_offer_text(order),
                 reply_markup=kb_order_offer(order),
-                parse_mode="Markdown",
+                
             ))
         except BadRequest as e:
             # чтобы не "висло" на одной битой отправке
@@ -2241,7 +2246,7 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
     uid = query.from_user.id
 
     context.user_data.clear()
-    context.user_data[UI_MSG_ID_KEY] = None
+    context.user_data.pop(UI_MSG_ID_KEY, None)
     context.user_data[CLIENT_STATE_KEY] = C_NONE
     context.user_data[COURIER_STATE_KEY] = K_NONE
 
@@ -2262,6 +2267,9 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    if not query:
+        return
+
     if context.user_data.get(START_LOCK_KEY):
         return
 
@@ -2270,8 +2278,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     query = update.callback_query
-    if not query:
-        return
+    
 
     await tg_retry(lambda: query.answer())
 

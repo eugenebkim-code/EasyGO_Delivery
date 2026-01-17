@@ -3139,6 +3139,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.user_data["draft_order"] = d
                 context.user_data[CLIENT_STATE_KEY] = C_CONFIRM
 
+                # 🔑 ЖЕСТКО РВЕМ СТАРЫЙ UI
+                context.user_data.pop(UI_MSG_ID_KEY, None)
+
                 await ui_render(
                     context,
                     uid,

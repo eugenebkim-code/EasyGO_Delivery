@@ -34,6 +34,8 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
+import asyncio
+from telegram.error import Conflict
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
@@ -3299,6 +3301,23 @@ async def cmd_go(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await render_home_root(context, uid)
 
+
+async def run_bot_with_retry(app: Application):
+    while True:
+        try:
+            log.info("Starting polling loop")
+            await app.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,
+                close_loop=False,
+            )
+        except Conflict:
+            log.warning("Polling conflict (409). Retrying in 5 seconds...")
+            await asyncio.sleep(5)
+        except Exception as e:
+            log.exception("Unexpected polling error")
+            await asyncio.sleep(5)
+
 # =========================
 # MAIN
 # =========================
@@ -3316,7 +3335,7 @@ def main():
     )
 
     log.info("Bot starting...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    asyncio.run(run_bot_with_retry(app))
 
 
 if __name__ == "__main__":

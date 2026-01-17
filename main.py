@@ -112,6 +112,9 @@ CLIENT_STATE_KEY = "client_state"
 COURIER_STATE_KEY = "courier_state"
 
 # client states
+
+C_CLIENT_NAME = "C_CLIENT_NAME"
+C_CLIENT_PHONE = "C_CLIENT_PHONE"
 C_NONE = "C_NONE"
 C_PRICE_RECOMMEND = "C_PRICE_RECOMMEND"   # показ рекомендованной цены + выбор
 C_PRICE_FINAL = "C_PRICE_FINAL"           # ручной ввод цены
@@ -125,6 +128,7 @@ C_TIME = "C_TIME"
 C_TIME_CUSTOM = "C_TIME_CUSTOM"
 C_CONTACT = "C_CONTACT"
 C_CONFIRM = "C_CONFIRM"
+
 
 # courier states
 K_NONE = "K_NONE"
@@ -779,7 +783,13 @@ def kb_home_root() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🛵 Как принять заказ", callback_data="home:courier")],
     ])
 
-
+def kb_order_taken_with_copy(order_id: str):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Скопировать адрес забора", callback_data=f"copy:pickup:{order_id}")],
+        [InlineKeyboardButton("📋 Скопировать адрес доставки", callback_data=f"copy:drop:{order_id}")],
+        [InlineKeyboardButton("📋 Скопировать телефон", callback_data=f"copy:phone:{order_id}")],
+        [InlineKeyboardButton("🚗 Выезжаю", callback_data=f"progress:{order_id}")]
+    ])
 
 def kb_back_to_start() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -1723,7 +1733,7 @@ async def handle_take_order(query, context: ContextTypes.DEFAULT_TYPE, courier_i
         context,
         courier_id,
         render_order_taken_text(order),
-        reply_markup=kb_order_taken(order.order_id)
+        reply_markup=kb_order_taken_with_copy(order.order_id)
     )
 
     # уведомления админам (вне UI)
@@ -2293,6 +2303,27 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    if data.startswith("copy:"):
+        _, what, order_id = data.split(":", 2)
+        order = ORDERS.get(order_id)
+
+        if not order or order.courier_tg_id != uid:
+            await query.answer("Нет доступа")
+            return
+
+        if what == "pickup":
+            text = order.pickup_address_ko
+        elif what == "drop":
+            text = order.drop_address_ko
+        elif what == "phone":
+            text = order.recipient_contact_text
+        else:
+            return
+
+        await context.bot.send_message(chat_id=uid, text=text)
+        return
+    
+    
     query = update.callback_query
 
     if not query:
@@ -2757,17 +2788,18 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             d["delivery_time_type"] = t
             d["delivery_time_text"] = ""
             context.user_data["draft_order"] = d
-            context.user_data[CLIENT_STATE_KEY] = C_CONTACT
+
+            context.user_data[CLIENT_STATE_KEY] = C_CLIENT_NAME
+
             if SHEETS:
                 SHEETS.log_event(uid, ROLE_CLIENT, "ORDER_STEP_TIME", meta=t)
-            await ui_render(context, uid, "Укажите контакт получателя.\nИмя и телефон или Telegram.")
+
+            await ui_render(context, uid, "Введите ваше имя.")
             return
 
         d["delivery_time_type"] = "custom"
         context.user_data["draft_order"] = d
         context.user_data[CLIENT_STATE_KEY] = C_TIME_CUSTOM
-        if SHEETS:
-            SHEETS.log_event(uid, ROLE_CLIENT, "ORDER_STEP_TIME_CUSTOM")
         await ui_render(context, uid, "Напишите желаемое время доставки.")
         return
 
@@ -3084,6 +3116,41 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     
     if S_client != C_NONE:
+
+        if S_client == C_CLIENT_NAME:
+            if not text:
+                await ui_render(context, uid, "Введите ваше имя.")
+                return
+
+            d = context.user_data.get("draft_order", {})
+            d["client_name"] = text
+            context.user_data["draft_order"] = d
+
+            context.user_data[CLIENT_STATE_KEY] = C_CLIENT_PHONE
+            await ui_render(context, uid, "Введите номер телефона.")
+            return
+
+            
+        if S_client == C_CLIENT_PHONE:
+            if not text:
+                await ui_render(context, uid, "Введите номер телефона.")
+                return
+
+            d = context.user_data.get("draft_order", {})
+            d["client_phone"] = text
+            d["recipient_contact_text"] = f"{d.get('client_name')} · {text}"
+
+            context.user_data["draft_order"] = d
+            context.user_data[CLIENT_STATE_KEY] = C_CONFIRM
+
+            await ui_render(
+                context,
+                uid,
+                render_order_summary_for_confirm(d),
+                reply_markup=kb_confirm_order()
+            )
+            return
+
         d = context.user_data.get("draft_order", {})
         
         if S_client == C_PRICE_FINAL:
@@ -3207,17 +3274,18 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Напишите желаемое время доставки."
                 )
                 return
+
+            d = context.user_data.get("draft_order", {})
             d["delivery_time_type"] = "custom"
             d["delivery_time_text"] = text
             context.user_data["draft_order"] = d
-            context.user_data[CLIENT_STATE_KEY] = C_CONTACT
+
+            context.user_data[CLIENT_STATE_KEY] = C_CLIENT_NAME
+
             if SHEETS:
                 SHEETS.log_event(uid, ROLE_CLIENT, "ORDER_STEP_TIME_CUSTOM_TEXT")
-            await ui_render(
-                    context,
-                    update.effective_chat.id,
-                    "Укажите контакт получателя.\nИмя и телефон или Telegram."
-            )
+
+            await ui_render(context, uid, "Введите ваше имя.")
             return
 
         if S_client == C_CONTACT:

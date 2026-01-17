@@ -191,9 +191,18 @@ async def tg_retry(call, tries: int = 6, base_sleep: float = 0.7):
 # =========================
 UI_MSG_ID_KEY = "ui_msg_id"
 
-async def ui_render(context, chat_id: int, text: str, reply_markup=None):
+from telegram.error import BadRequest
+
+async def ui_render(
+    context,
+    chat_id: int,
+    text: str,
+    reply_markup=None,
+    parse_mode=None,
+):
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
 
+    # 1️⃣ сначала пробуем отредактировать существующий UI
     if msg_id:
         try:
             await context.bot.edit_message_text(
@@ -201,17 +210,30 @@ async def ui_render(context, chat_id: int, text: str, reply_markup=None):
                 message_id=msg_id,
                 text=text,
                 reply_markup=reply_markup,
+                parse_mode=parse_mode,
+                disable_web_page_preview=True,
             )
             return
-        except Exception as e:
-            log.warning("UI edit failed, resetting ui_msg_id: %s", e)
+
+        except BadRequest as e:
+            # сообщение не найдено / нельзя редактировать
+            log.warning("ui_render edit failed, fallback to send: %s", e)
             context.user_data.pop(UI_MSG_ID_KEY, None)
 
+        except Exception as e:
+            # любой другой сбой — тоже fallback
+            log.warning("ui_render edit unexpected error, fallback to send: %s", e)
+            context.user_data.pop(UI_MSG_ID_KEY, None)
+
+    # 2️⃣ fallback: создаем НОВОЕ сообщение и перепривязываем UI
     msg = await context.bot.send_message(
         chat_id=chat_id,
         text=text,
         reply_markup=reply_markup,
+        parse_mode=parse_mode,
+        disable_web_page_preview=True,
     )
+
     context.user_data[UI_MSG_ID_KEY] = msg.message_id
 
 
@@ -1209,22 +1231,22 @@ def init_user_defaults(context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # COMMANDS
 # =========================
+import asyncio
+
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    # 1️⃣ сбрасываем ТОЛЬКО UI-сообщение
-    context.user_data.pop(UI_MSG_ID_KEY, None)
-
-    # 2️⃣ переинициализируем дефолты
+    # 1) полный сброс состояния
+    context.user_data.clear()
     init_user_defaults(context)
 
-    # 3️⃣ сразу рисуем главный экран
+    # 2) гарантированно рисуем экран сразу
     await render_home_root(context, chat.id)
 
-    # 4️⃣ все побочное логирование — в фоне
+    # 3) любое IO - после UI, и с защитой
     if SHEETS and user:
-        async def _log_start():
+        async def _log():
             try:
                 SHEETS.log_visit(
                     user_tg_id=user.id,
@@ -1235,9 +1257,8 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 SHEETS.log_event(user.id, ROLE_UNKNOWN, "START_CMD")
             except Exception as e:
-                log.warning("START logging failed: %s", e)
-
-        asyncio.create_task(_log_start())
+                log.warning("START log failed: %s", e)
+        asyncio.create_task(_log())
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin(update.effective_user.id):
@@ -1260,6 +1281,8 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_courier_orders(query, context: ContextTypes.DEFAULT_TYPE):
     uid = query.from_user.id
+
+
 
     if not courier_is_approved(uid):
         await ui_render(context, uid, "Нет доступа.")

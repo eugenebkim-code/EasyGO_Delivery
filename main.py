@@ -2885,7 +2885,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
-    if update.message and update.message.text.startswith("/"):
+    if update.message and update.message.text and update.message.text.startswith("/"):
         return
 
     if context.user_data.get(START_LOCK_KEY):

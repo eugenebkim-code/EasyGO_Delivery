@@ -292,17 +292,23 @@ EVENTS_HEADERS = [
 
 def build_sheets_service():
     json_str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-
-    if not json_str:
-        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON is not set")
-
-    info = json.loads(json_str)
+    json_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
 
-    creds = service_account.Credentials.from_service_account_info(
-        info, scopes=scopes
-    )
+    if json_str:
+        info = json.loads(json_str)
+        creds = service_account.Credentials.from_service_account_info(
+            info, scopes=scopes
+        )
+    elif json_file:
+        creds = service_account.Credentials.from_service_account_file(
+            json_file, scopes=scopes
+        )
+    else:
+        raise RuntimeError(
+            "Set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE"
+        )
 
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 

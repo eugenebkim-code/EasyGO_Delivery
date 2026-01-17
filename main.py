@@ -193,16 +193,9 @@ UI_MSG_ID_KEY = "ui_msg_id"
 
 from telegram.error import BadRequest
 
-async def ui_render(
-    context,
-    chat_id: int,
-    text: str,
-    reply_markup=None,
-    parse_mode=None,
-):
+async def ui_render(context, chat_id: int, text: str, reply_markup=None):
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
 
-    # 1️⃣ сначала пробуем отредактировать существующий UI
     if msg_id:
         try:
             await context.bot.edit_message_text(
@@ -210,30 +203,20 @@ async def ui_render(
                 message_id=msg_id,
                 text=text,
                 reply_markup=reply_markup,
-                parse_mode=parse_mode,
-                disable_web_page_preview=True,
             )
             return
-
         except BadRequest as e:
-            # сообщение не найдено / нельзя редактировать
-            log.warning("ui_render edit failed, fallback to send: %s", e)
+            log.warning("UI edit failed, fallback to send: %s", e)
             context.user_data.pop(UI_MSG_ID_KEY, None)
-
         except Exception as e:
-            # любой другой сбой — тоже fallback
-            log.warning("ui_render edit unexpected error, fallback to send: %s", e)
+            log.exception("Unexpected UI edit error")
             context.user_data.pop(UI_MSG_ID_KEY, None)
 
-    # 2️⃣ fallback: создаем НОВОЕ сообщение и перепривязываем UI
     msg = await context.bot.send_message(
         chat_id=chat_id,
         text=text,
         reply_markup=reply_markup,
-        parse_mode=parse_mode,
-        disable_web_page_preview=True,
     )
-
     context.user_data[UI_MSG_ID_KEY] = msg.message_id
 
 

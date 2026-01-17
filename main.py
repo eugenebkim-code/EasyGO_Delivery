@@ -1273,7 +1273,59 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await render_home_root(context, chat_id)
 
-    
+async def restart_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+
+    context.user_data.clear()
+    context.user_data.pop(UI_MSG_ID_KEY, None)
+    init_user_defaults(context)
+
+    await render_home_root(context, uid)
+
+async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+
+    # только UI, логика не трогается
+    context.user_data.pop(UI_MSG_ID_KEY, None)
+
+    role = context.user_data.get(USER_ROLE_KEY, ROLE_UNKNOWN)
+    client_state = context.user_data.get(CLIENT_STATE_KEY, C_NONE)
+    courier_state = context.user_data.get(COURIER_STATE_KEY, K_NONE)
+
+    # курьер с активным заказом
+    if role == ROLE_COURIER:
+        active = get_active_order_for_courier(uid)
+        if active:
+            await ui_render(
+                context,
+                uid,
+                render_order_taken_text(active),
+                reply_markup=kb_active_order()
+            )
+            return
+
+        prof = COURIERS.get(uid)
+        if prof and prof.status == COURIER_APPROVED:
+            await ui_render(
+                context,
+                uid,
+                "🛵 Меню курьера:",
+                reply_markup=kb_courier_menu_approved(uid)
+            )
+            return
+
+    # клиент в процессе оформления
+    if role == ROLE_CLIENT and client_state != C_NONE:
+        await ui_render(
+            context,
+            uid,
+            "Вы продолжаете оформление заказа.\nСледуйте инструкциям на экране."
+        )
+        return
+
+    # fallback
+    await render_home_root(context, uid)
+
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin(update.effective_user.id):
         return
@@ -3469,6 +3521,8 @@ def main():
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CommandHandler("go", cmd_go))
+    app.add_handler(CommandHandler("restart", restart_cmd))
+    app.add_handler(CommandHandler("clear", clear_cmd))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, on_message))
 

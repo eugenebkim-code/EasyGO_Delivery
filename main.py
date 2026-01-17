@@ -36,9 +36,6 @@ from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 from telegram.error import Conflict
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from threading import Thread
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import RetryAfter, TimedOut, NetworkError, BadRequest
 from telegram.ext import (
@@ -1171,25 +1168,6 @@ def render_admin_order_line(o: Order) -> str:
     )
 
 
-# =========================
-# HTTP SERVER (OPTIONAL)
-# =========================
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
-
-    def do_HEAD(self):
-        self.send_response(200)
-        self.end_headers()
-
-
-def run_http():
-    port = int(os.environ.get("PORT", "8080"))
-    httpd = HTTPServer(("0.0.0.0", port), Handler)
-    log.info("HTTP server on port %s", port)
-    httpd.serve_forever()
 
 # =========================
 # HOME ROOT (single entry point)

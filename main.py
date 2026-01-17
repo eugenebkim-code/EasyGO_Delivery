@@ -201,13 +201,13 @@ UI_RESET_KEY = "ui_reset_in_progress"
 from telegram.error import BadRequest
 
 async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
+    if not text or not str(text).strip():
+        log.warning("UI_RENDER SKIP: empty text")
+        text = " "
+
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
 
-    if not isinstance(msg_id, int):
-        context.user_data.pop(UI_MSG_ID_KEY, None)
-        msg_id = None
-
-    if msg_id:
+    if isinstance(msg_id, int):
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
@@ -1212,24 +1212,17 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # 🔥 ПРИНУДИТЕЛЬНЫЙ АНЛОК
+    # 1. жёсткий сброс
     context.user_data.clear()
-
-    # базовая инициализация
+    context.user_data[UI_RESET_KEY] = True
+    context.user_data.pop(UI_MSG_ID_KEY, None)
     init_user_defaults(context)
 
-    # рвем любой старый UI
-    context.user_data.pop(UI_MSG_ID_KEY, None)
-    context.user_data.pop(START_LOCK_KEY, None)
+    # 2. СНЯТЬ БЛОКИРОВКУ
     context.user_data.pop(UI_RESET_KEY, None)
 
-    # ⚠️ НЕ через ui_render
-    # /start всегда новое сообщение
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=HOME_TEXT,
-        reply_markup=kb_home_root()
-    )
+    # 3. гарантированный ответ
+    await render_home_root(context, chat_id)
 
     
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1397,7 +1390,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE, data
     if data == "admin:new_orders":
         items = list(ORDERS.values())
         if not items:
-            ui_render(context, uid, "Пока нет заказов.")
+            await ui_render(context, uid, "Пока нет заказов.")
             return
 
         items.sort(key=lambda o: int(o.order_id), reverse=True)
@@ -1877,7 +1870,7 @@ async def handle_proof_photo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "✅ Заказ завершен.\n\n🛵 Меню курьера:",
         reply_markup=kb_courier_menu_approved(uid)
     )
-
+    text = text.strip() if text and text.strip() else " "
     # уведомляем клиента
     try:
         await tg_retry(lambda: context.bot.send_photo(
@@ -2533,14 +2526,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             period if period in ("today", "week", "month") else "month"
         )
 
-        await ui_render(
-            context,
-            uid,
-            render_orders_list(filtered),
-            reply_markup=kb_client_orders_filters()
-        )
-        return
-
+        text = render_orders_list(filtered)
+        if not text.strip():
+            text = "Нет данных."
+        await ui_render(context, uid, text)
+        
     if data == "client:new_order":
         context.user_data.pop(UI_MSG_ID_KEY, None)
         context.user_data["draft_order"] = {}
@@ -2825,7 +2815,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("skip:"):
         if SHEETS:
             SHEETS.log_event(uid, ROLE_COURIER, "ORDER_SKIPPED", order_id=data.split(":", 1)[1])
-        await ui_render(context, uid, "Ок.")
+        await ui_render(context, uid, "Заказ пропущен.")
         return
 
     if data.startswith("done:"):
@@ -2846,7 +2836,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
-    if update.message and update.message.text == "/start":
+    if update.message and update.message.text.startswith("/"):
         return
 
     if context.user_data.get(START_LOCK_KEY):
@@ -3317,7 +3307,7 @@ async def cmd_go(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     context.user_data.clear()
-    context.user_data[UI_MSG_ID_KEY] = None
+    context.user_data.pop(UI_MSG_ID_KEY, None)
     init_user_defaults(context)
 
     await render_home_root(context, uid)
@@ -3338,7 +3328,10 @@ def main():
     async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("DEBUG UPDATE: %s", update)
 
-    app.add_handler(MessageHandler(filters.ALL, debug_all), group=999)
+    app.add_handler(
+        MessageHandler(filters.TEXT | filters.PHOTO, debug_all),
+        group=999
+    )
 
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))

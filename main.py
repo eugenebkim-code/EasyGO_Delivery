@@ -195,22 +195,6 @@ UI_RESET_KEY = "ui_reset_in_progress"
 from telegram.error import BadRequest
 
 async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
-    
-    if context.user_data.get(UI_RESET_KEY) and text != HOME_TEXT:
-        log.info("UI_RENDER SKIPPED (reset in progress)")
-        return
-
-    last_text = context.user_data.get("_ui_last_text")
-    if last_text == text:
-        log.info("UI_RENDER SKIP (same text)")
-        return
-    context.user_data["_ui_last_text"] = text
-    
-    # 🔒 если идет reset — НИКТО не рисует UI
-    if context.user_data.get(UI_RESET_KEY):
-        log.info("UI_RENDER SKIPPED (reset in progress)")
-        return
-
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
 
     if msg_id:
@@ -226,7 +210,7 @@ async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwarg
         except BadRequest:
             context.user_data.pop(UI_MSG_ID_KEY, None)
         except Exception:
-            log.exception("Unexpected UI edit error")
+            log.exception("UI edit error")
             context.user_data.pop(UI_MSG_ID_KEY, None)
 
     msg = await context.bot.send_message(
@@ -1235,18 +1219,12 @@ def init_user_defaults(context: ContextTypes.DEFAULT_TYPE):
 import asyncio
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    uid = update.effective_user.id
+    chat_id = update.effective_chat.id
 
-    # 💣 ПОЛНЫЙ ЖЕСТКИЙ СБРОС СЕССИИ
     context.user_data.clear()
-
-    # 🔑 обязательные ключи
     context.user_data[UI_MSG_ID_KEY] = None
-    init_user_defaults(context)
 
-    # 🏠 гарантированный стартовый экран
-    await render_home_root(context, chat.id)
+    await render_home_root(context, chat_id)
 
     
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

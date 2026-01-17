@@ -55,6 +55,10 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+import functools
+import asyncio
+
+
 # =========================
 # LOGGING
 # =========================
@@ -172,6 +176,11 @@ def role_for_log(context: ContextTypes.DEFAULT_TYPE) -> str:
 # =========================
 # TG RETRY
 # =========================
+
+async def run_blocking(func, *args, **kwargs):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
 async def tg_retry(call, tries: int = 6, base_sleep: float = 0.7):
     last_exc = None
     for attempt in range(tries):
@@ -1993,12 +2002,10 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-def google_geocode(address: str) -> Optional[tuple[float, float]]:
+async def google_geocode(address: str) -> Optional[tuple[float, float]]:
     if not GOOGLE_MAPS_API_KEY:
         log.warning("GOOGLE GEOCODE SKIP: API KEY MISSING")
         return None
-
-    log.info("GOOGLE GEOCODE REQUEST | addr=%r", address)
 
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {
@@ -2007,11 +2014,11 @@ def google_geocode(address: str) -> Optional[tuple[float, float]]:
     }
 
     try:
-        r = requests.get(url, params=params, timeout=5)
+        r = await run_blocking(requests.get, url, params=params, timeout=5)
         log.info("GOOGLE GEOCODE HTTP %s | %s", r.status_code, r.url)
         r.raise_for_status()
         data = r.json()
-    except Exception as e:
+    except Exception:
         log.exception("GOOGLE GEOCODE ERROR")
         return None
 
@@ -2021,7 +2028,7 @@ def google_geocode(address: str) -> Optional[tuple[float, float]]:
     loc = data["results"][0]["geometry"]["location"]
     return loc["lat"], loc["lng"]
 
-def google_distance_km(
+async def google_distance_km(
     lat1: float,
     lng1: float,
     lat2: float,
@@ -2046,7 +2053,7 @@ def google_distance_km(
     )
 
     try:
-        r = requests.get(url, params=params, timeout=5)
+        r = await run_blocking(requests.get, url, params=params, timeout=5)
         log.info(
             "GOOGLE DISTANCE HTTP %s | %s",
             r.status_code,
@@ -2095,7 +2102,7 @@ def google_distance_km(
 # NAVER
 # =========================
 
-def naver_geocode(address: str):
+async def naver_geocode(address: str):
     url = "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode"
     headers = {
         "X-NCP-APIGW-API-KEY-ID": os.getenv("NAVER_CLIENT_ID"),
@@ -2110,7 +2117,7 @@ def naver_geocode(address: str):
         bool(headers.get("X-NCP-APIGW-API-KEY")),
     )
 
-    r = requests.get(url, headers=headers, params=params, timeout=5)
+    r = await run_blocking(requests.get, url, params=params, timeout=5)
 
     log.info(
         "NAVER GEOCODE RESPONSE | status=%s | body=%s",
@@ -2127,7 +2134,7 @@ def naver_geocode(address: str):
     a = data["addresses"][0]
     return float(a["y"]), float(a["x"])  # lat, lon
 
-def naver_route_distance_km(
+async def naver_route_distance_km(
     start_lat: float,
     start_lon: float,
     goal_lat: float,
@@ -2164,7 +2171,7 @@ def naver_route_distance_km(
         "option": "traoptimal",
     }
 
-    r = requests.get(url, headers=headers, params=params, timeout=6)
+    r = await run_blocking(requests.get, url, params=params, timeout=5)
 
     log.info(
         "NAVER ROUTE RESPONSE | status=%s | body=%s",
@@ -2193,11 +2200,9 @@ def naver_route_distance_km(
         log.warning("NAVER ROUTE DIST PARSE ERROR: %s", e)
         return None
 
-def calc_recommended_price_krw(pickup_addr: str, drop_addr: str) -> Optional[int]:
-    log.info("PRICE CALC START | pickup=%r | drop=%r", pickup_addr, drop_addr)
-
-    a = google_geocode(pickup_addr)
-    b = google_geocode(drop_addr)
+async def calc_recommended_price_krw(pickup_addr: str, drop_addr: str) -> Optional[int]:
+    a = await google_geocode(pickup_addr)
+    b = await google_geocode(drop_addr)
     if not a or not b:
         log.warning("PRICE CALC FAIL | geocode failed | a=%s b=%s", a, b)
         return None
@@ -2205,7 +2210,8 @@ def calc_recommended_price_krw(pickup_addr: str, drop_addr: str) -> Optional[int
     lat1, lng1 = a
     lat2, lng2 = b
 
-    km = google_distance_km(lat1, lng1, lat2, lng2)
+    km = await google_distance_km(lat1, lng1, lat2, lng2)
+
     source = "google"
 
     if km is None:
@@ -3193,7 +3199,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             # Other районы - сначала показываем рекомендованную цену
-            recommended = calc_recommended_price_krw(
+            recommended = await calc_recommended_price_krw(
                 d.get("pickup_address_ko", ""),
                 d.get("drop_address_ko", "")
             )

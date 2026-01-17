@@ -1212,20 +1212,22 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # 💣 полный безопасный сброс
+    # 🔥 ПРИНУДИТЕЛЬНЫЙ АНЛОК
     context.user_data.clear()
 
-    # 🧼 базовые значения
+    # базовая инициализация
     init_user_defaults(context)
 
-    # ❌ гарантированно рвем старый UI
+    # рвем любой старый UI
     context.user_data.pop(UI_MSG_ID_KEY, None)
+    context.user_data.pop(START_LOCK_KEY, None)
+    context.user_data.pop(UI_RESET_KEY, None)
 
-    # ✅ ВСЕГДА рисуем новый экран
-    await ui_render(
-        context,
-        chat_id,
-        HOME_TEXT,
+    # ⚠️ НЕ через ui_render
+    # /start всегда новое сообщение
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=HOME_TEXT,
         reply_markup=kb_home_root()
     )
 
@@ -2844,6 +2846,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    if update.message and update.message.text == "/start":
+        return
+
     if context.user_data.get(START_LOCK_KEY):
         return
     

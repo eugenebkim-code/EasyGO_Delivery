@@ -3322,8 +3322,6 @@ async def cmd_go(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAIN
 # =========================
 def main():
-    Thread(target=run_http, daemon=True).start()
-
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
     app.add_handler(CommandHandler("start", start_cmd))

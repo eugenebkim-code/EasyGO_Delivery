@@ -1310,28 +1310,55 @@ async def _send_courier_naver_warning_once(context: ContextTypes.DEFAULT_TYPE, c
 async def notify_new_order(context: ContextTypes.DEFAULT_TYPE, order: Order):
     text = render_order_offer_text(order)
 
-    for admin_id in ADMIN_IDS:
+    async def safe_send(coro, label: str):
         try:
-            await tg_retry(lambda aid=admin_id: context.bot.send_message(
-                chat_id=aid,
-                text=f"🆕 Новый заказ\n\n{text}"
-            ))
+            await tg_retry(coro)
         except Exception as e:
-            log.warning("Admin notify failed: %s", e)
+            log.warning("%s notify failed: %s", label, e)
 
+    tasks = []
+
+    # админы
+    for admin_id in ADMIN_IDS:
+        tasks.append(
+            asyncio.create_task(
+                safe_send(
+                    lambda aid=admin_id: context.bot.send_message(
+                        chat_id=aid,
+                        text=f"🆕 Новый заказ\n\n{text}"
+                    ),
+                    "Admin"
+                )
+            )
+        )
+
+    # курьеры
     for cid, prof in COURIERS.items():
         if prof.status != COURIER_APPROVED:
             continue
-        await _send_courier_naver_warning_once(context, cid)
-        try:
-            await tg_retry(lambda ccid=cid: context.bot.send_message(
-                chat_id=ccid,
-                text=text,
-                reply_markup=kb_order_offer(order),
-                
-            ))
-        except Exception as e:
-            log.warning("Courier notify failed: %s", e)
+
+        # предупреждение про Naver тоже в фоне
+        tasks.append(
+            asyncio.create_task(
+                _send_courier_naver_warning_once(context, cid)
+            )
+        )
+
+        tasks.append(
+            asyncio.create_task(
+                safe_send(
+                    lambda ccid=cid: context.bot.send_message(
+                        chat_id=ccid,
+                        text=text,
+                        reply_markup=kb_order_offer(order),
+                    ),
+                    "Courier"
+                )
+            )
+        )
+
+    # 🔑 НЕ await !!!
+    # просто даем задачам уйти в фон
 
 
 async def notify_order_canceled(context: ContextTypes.DEFAULT_TYPE, order: Order):
@@ -2787,7 +2814,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             uid,
             "✅ Заказ принят.\nКурьер свяжется с вами напрямую."
         )
-        await notify_new_order(context, order)
+        asyncio.create_task(
+            notify_new_order(context, order)
+        )
         return
 
     if data == "courier:apply":

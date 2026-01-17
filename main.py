@@ -1096,7 +1096,7 @@ def render_order_offer_text(order: Order) -> str:
         f"📦 Тип: {dtype}\n"
         f"🕒 Время: {tline}\n"
         f"💰 Цена: {order.price_krw} вон\n\n"
-        f"📍 Адрес забора:\n`{order.pickup_address_ko}`\n\n"
+        f"📍 Адрес забора:\n{order.pickup_address_ko}\n\n"
         f"🏁 Адрес доставки:\n`{order.drop_address_ko}`"
     )
 
@@ -1107,7 +1107,7 @@ def render_order_taken_text(order: Order) -> str:
         "✅ Вы взяли заказ.\n\n"
         f"📦 Заказ #{order.order_id}\n"
         f"💰 Цена: {order.price_krw} вон\n\n"
-        f"📍 Адрес забора:\n`{order.pickup_address_ko}`\n\n"
+        f"📍 Адрес забора:\n{order.pickup_address_ko}\n\n"
         f"🏁 Адрес доставки:\n`{order.drop_address_ko}`\n\n"
         f"🔒 Код подъезда:\n{door}\n\n"
         f"📞 Контакт:\n{order.recipient_contact_text}\n\n"

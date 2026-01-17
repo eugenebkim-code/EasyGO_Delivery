@@ -3147,14 +3147,49 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             d["client_phone"] = text
             d["recipient_contact_text"] = f"{d.get('client_name')} · {text}"
 
-            context.user_data["draft_order"] = d
-            context.user_data[CLIENT_STATE_KEY] = C_CONFIRM
+            # ✅ если Dunpo - цена фикс сразу
+            if d.get("zone") == "dunpo":
+                d["price_krw"] = DEFAULT_PRICE_KRW
+                context.user_data["draft_order"] = d
+                context.user_data[CLIENT_STATE_KEY] = C_CONFIRM
 
+                await ui_render(
+                    context,
+                    uid,
+                    render_order_summary_for_confirm(d),
+                    reply_markup=kb_confirm_order()
+                )
+                return
+
+            # ✅ если other - считаем рекомендованную и предлагаем выбор
+            pickup = d.get("pickup_address_ko", "")
+            dropoff = d.get("drop_address_ko", "")
+
+            recommended = await calc_recommended_price_krw(pickup, dropoff)
+            if recommended:
+                d["recommended_price_krw"] = recommended
+                context.user_data["draft_order"] = d
+                context.user_data[CLIENT_STATE_KEY] = C_PRICE_RECOMMEND
+
+                await ui_render(
+                    context,
+                    uid,
+                    (
+                        f"💰 Рекомендованная цена: {recommended} вон\n"
+                        f"(расчет: {PRICE_PER_KM_KRW} вон за км)\n\n"
+                        "Принять эту цену или ввести свою?"
+                    ),
+                    reply_markup=kb_client_price_recommend()
+                )
+                return
+
+            # fallback - если не смогли посчитать маршрут
+            context.user_data["draft_order"] = d
+            context.user_data[CLIENT_STATE_KEY] = C_PRICE_FINAL
             await ui_render(
                 context,
                 uid,
-                render_order_summary_for_confirm(d),
-                reply_markup=kb_confirm_order()
+                "💰 Не удалось рассчитать маршрут. Укажите цену вручную (в вонах)."
             )
             return
 

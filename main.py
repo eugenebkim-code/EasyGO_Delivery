@@ -2303,6 +2303,14 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    query = update.callback_query
+    if not query:
+        return
+
+    uid = query.from_user.id
+    data = query.data or ""
+
+    # 📋 COPY HANDLER — СРАЗУ ПОСЛЕ data
     if data.startswith("copy:"):
         _, what, order_id = data.split(":", 2)
         order = ORDERS.get(order_id)
@@ -2322,8 +2330,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await context.bot.send_message(chat_id=uid, text=text)
         return
-    
-    
+        
     query = update.callback_query
 
     if not query:

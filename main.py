@@ -1021,26 +1021,42 @@ def text_how_courier() -> str:
 def build_courier_stats_text(courier_id: int) -> str:
     now = datetime.now()
 
-    def in_period(o: Order, days: int):
-        dt = parse_ts(o.completed_at)
-        if not dt:
-            return False
-        return dt >= now - timedelta(days=days)
+    start_today = datetime(now.year, now.month, now.day)
+    start_week = start_today - timedelta(days=start_today.weekday())  # пн
+    start_month = datetime(now.year, now.month, 1)
 
-    done = [
+    def completed_dt(o: Order):
+        return parse_ts(o.completed_at)
+
+    # выполненные заказы курьера
+    my_done = [
         o for o in ORDERS.values()
         if o.courier_tg_id == courier_id and o.status == ORDER_DONE
     ]
 
-    today = sum(o.price_krw for o in done if in_period(o, 1))
-    week = sum(o.price_krw for o in done if in_period(o, 7))
-    month = sum(o.price_krw for o in done if in_period(o, 30))
+    def stats_for_period(items, start_dt):
+        filtered = [o for o in items if completed_dt(o) and completed_dt(o) >= start_dt]
+        count = len(filtered)
+        total = sum(o.price_krw for o in filtered)
+        return count, total
+
+    c_today, s_today = stats_for_period(my_done, start_today)
+    c_week, s_week = stats_for_period(my_done, start_week)
+    c_month, s_month = stats_for_period(my_done, start_month)
+
+    # платформа
+    platform_done_count = sum(
+        1 for o in ORDERS.values() if o.status == ORDER_DONE
+    )
 
     return (
-        "📊 Мои заказы\n\n"
-        f"📅 Сегодня: {today} вон\n"
-        f"📆 Неделя: {week} вон\n"
-        f"🗓 Месяц: {month} вон"
+        "📊 Статистика\n\n"
+        "🛵 Мои заказы\n"
+        f"Сегодня: {c_today} заказ(ов) · {s_today} вон\n"
+        f"Эта неделя: {c_week} заказ(ов) · {s_week} вон\n"
+        f"Этот месяц: {c_month} заказ(ов) · {s_month} вон\n\n"
+        "📦 Платформа\n"
+        f"Всего выполнено заказов: {platform_done_count}"
     )
 
 def _dtype_line(dtype: str, other: str) -> str:

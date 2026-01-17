@@ -1212,16 +1212,16 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # 1. жёсткий сброс
+    # 🔥 СРАЗУ отвечаем, без FSM
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="⏳ Загружаю меню..."
+    )
+
     context.user_data.clear()
-    context.user_data[UI_RESET_KEY] = True
     context.user_data.pop(UI_MSG_ID_KEY, None)
     init_user_defaults(context)
 
-    # 2. СНЯТЬ БЛОКИРОВКУ
-    context.user_data.pop(UI_RESET_KEY, None)
-
-    # 3. гарантированный ответ
     await render_home_root(context, chat_id)
 
     
@@ -3330,7 +3330,7 @@ def main():
 
     log.info("Bot starting...")
     app.run_polling(
-        allowed_updates=Update.ALL_TYPES,
+        allowed_updates=["message", "callback_query"],
         drop_pending_updates=True
     )
 

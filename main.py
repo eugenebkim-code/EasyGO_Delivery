@@ -210,9 +210,6 @@ async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwarg
         context.user_data.pop(UI_MSG_ID_KEY, None)
         msg_id = None
 
-    if context.user_data.get(START_LOCK_KEY):
-        return
-
     if msg_id:
         try:
             await context.bot.edit_message_text(
@@ -1237,30 +1234,22 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # 🔒 ЖЕСТКАЯ БЛОКИРОВКА
-    context.user_data[START_LOCK_KEY] = True
+    # 💣 полный безопасный сброс
+    context.user_data.clear()
 
-    try:
-        # 💣 ПОЛНЫЙ СБРОС СЕССИИ
-        context.user_data.clear()
+    # 🧼 базовые значения
+    init_user_defaults(context)
 
-        # 🧼 базовые значения
-        init_user_defaults(context)
+    # ❌ гарантированно рвем старый UI
+    context.user_data.pop(UI_MSG_ID_KEY, None)
 
-        # ❌ рвем старый UI
-        context.user_data.pop(UI_MSG_ID_KEY, None)
-
-        # ✅ ВСЕ UI ТОЛЬКО ЧЕРЕЗ ui_render
-        await ui_render(
-            context,
-            chat_id,
-            HOME_TEXT,
-            reply_markup=kb_home_root()
-        )
-
-    finally:
-        # 🔓 СНЯТИЕ БЛОКИРОВКИ
-        context.user_data.pop(START_LOCK_KEY, None)
+    # ✅ ВСЕГДА рисуем новый экран
+    await ui_render(
+        context,
+        chat_id,
+        HOME_TEXT,
+        reply_markup=kb_home_root()
+    )
 
     
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

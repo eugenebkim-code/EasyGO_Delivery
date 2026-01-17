@@ -50,6 +50,7 @@ from telegram.ext import (
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from datetime import datetime, date, timedelta
 
 import functools
 import asyncio
@@ -843,6 +844,7 @@ def kb_courier_menu_approved(courier_id: int):
         rows = [
             [InlineKeyboardButton("📋 Текущие заявки", callback_data="courier:orders")],
             [InlineKeyboardButton("📊 Статистика", callback_data="courier:stats")]
+            [InlineKeyboardButton("📊 Мой дэш", callback_data="courier:dashboard")],
         ]
 
     rows.append(
@@ -2299,7 +2301,64 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Сессия обновлена. Нажмите /start", show_alert=False)
         return
 
+    # ===== COURIER DASH =====
+
+    def _week_bounds(d: date):
+    start = d - timedelta(days=d.weekday())  # понедельник
+    end = start + timedelta(days=6)
+    return start, end
+
+async def show_courier_dashboard(context, uid: int):
+    now = datetime.now()
+    today = now.date()
+    week_start, week_end = _week_bounds(today)
+
+    # фильтр выполненных заказов курьера
+    done = [
+        o for o in ORDERS.values()
+        if o.status == ORDER_DONE and o.courier_tg_id == uid and o.completed_at
+    ]
+
+    def is_today(o):
+        return o.completed_at.date() == today
+
+    def is_this_week(o):
+        d = o.completed_at.date()
+        return week_start <= d <= week_end
+
+    def is_this_month(o):
+        return o.completed_at.year == today.year and o.completed_at.month == today.month
+
+    def sum_price(items):
+        return sum(int(o.price_final or 0) for o in items)
+
+    today_items = [o for o in done if is_today(o)]
+    week_items  = [o for o in done if is_this_week(o)]
+    month_items = [o for o in done if is_this_month(o)]
+
+    total_done_platform = sum(1 for o in ORDERS.values() if o.status == ORDER_DONE)
+
+    text = (
+        "📊 Мой дэш (EasyGo)\n\n"
+        "📦 Заказы\n"
+        f"• Сегодня: {len(today_items)}\n"
+        f"• Эта неделя: {len(week_items)}\n"
+        f"• Этот месяц: {len(month_items)}\n\n"
+        "💰 Сумма\n"
+        f"• Сегодня: {sum_price(today_items):,} ₩\n"
+        f"• Эта неделя: {sum_price(week_items):,} ₩\n"
+        f"• Этот месяц: {sum_price(month_items):,} ₩\n\n"
+        f"🏆 Всего выполнено заказов на платформе: {total_done_platform}\n\n"
+        "💚 Спасибо за вашу работу"
+    )
+
+    await context.bot.send_message(chat_id=uid, text=text)
+
     # ===== HOME SCREENS =====
+
+    if data == "courier:dashboard":
+        await show_courier_dashboard(context, uid)
+        return
 
     if data == "home:start":
         await ui_render(

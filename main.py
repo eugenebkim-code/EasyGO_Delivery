@@ -2834,6 +2834,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ---- CONFIRM ----
         d = context.user_data.get("draft_order", {})
+        
+        # 🔒 страховка для Dunpo
+        if d.get("zone") == "dunpo" and not d.get("price_krw"):
+            d["price_krw"] = DEFAULT_PRICE_KRW
+            context.user_data["draft_order"] = d
+
 
         price = int(d.get("price_krw") or 0)
         if price <= 0:

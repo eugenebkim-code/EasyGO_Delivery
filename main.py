@@ -2349,6 +2349,41 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_role = context.user_data.get(USER_ROLE_KEY, ROLE_UNKNOWN)
     data = query.data or ""
 
+    # ===== COURIER ACTIONS — MUST BE BEFORE CLIENT FSM CHECK =====
+
+    if data.startswith("take:"):
+        order_id = data.split(":", 1)[1]
+        await handle_take_order(query, context, uid, order_id)
+        return
+
+    if data.startswith("badaddr:"):
+        order_id = data.split(":", 1)[1]
+        await handle_bad_address(query, context, uid, order_id)
+        return
+
+    if data.startswith("skip:"):
+        order_id = data.split(":", 1)[1]
+        if SHEETS:
+            SHEETS.log_event(uid, ROLE_COURIER, "ORDER_SKIPPED", order_id=order_id)
+        await ui_render(context, uid, "Заказ пропущен.")
+        return
+
+    if data.startswith("progress:"):
+        order_id = data.split(":", 1)[1]
+        await handle_in_progress_clicked(query, context, uid, order_id)
+        return
+
+    if data.startswith("picked:"):
+        order_id = data.split(":", 1)[1]
+        await handle_picked_up(query, context, uid, order_id)
+        return
+
+    if data.startswith("done:"):
+        order_id = data.split(":", 1)[1]
+        await handle_done_clicked(query, context, uid, order_id)
+        return
+
+
     if CLIENT_STATE_KEY not in context.user_data:
         await query.answer("Сессия обновлена. Нажмите /start", show_alert=False)
         return
@@ -2917,32 +2952,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if SHEETS:
             SHEETS.log_event(uid, ROLE_COURIER, "COURIER_APPLY_START")
         await ui_render(context, uid, "Введите ваше имя.")
-        return
-
-    if data.startswith("badaddr:"):
-        order_id = data.split(":", 1)[1]
-        await handle_bad_address(query, context, uid, order_id)
-        return
-
-    if data.startswith("take:"):
-        order_id = data.split(":", 1)[1]
-        await handle_take_order(query, context, uid, order_id)
-        return
-
-    if data.startswith("progress:"):
-        order_id = data.split(":", 1)[1]
-        await handle_in_progress_clicked(query, context, uid, order_id)
-        return
-
-    if data.startswith("skip:"):
-        if SHEETS:
-            SHEETS.log_event(uid, ROLE_COURIER, "ORDER_SKIPPED", order_id=data.split(":", 1)[1])
-        await ui_render(context, uid, "Заказ пропущен.")
-        return
-
-    if data.startswith("done:"):
-        order_id = data.split(":", 1)[1]
-        await handle_done_clicked(query, context, uid, order_id)
         return
 
     if data.startswith("admin:"):

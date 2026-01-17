@@ -173,11 +173,6 @@ def role_for_log(context: ContextTypes.DEFAULT_TYPE) -> str:
 # TG RETRY
 # =========================
 
-async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    log.info("DEBUG UPDATE: %s", update)
-
-app.add_handler(MessageHandler(filters.ALL, debug_all), group=999)
-
 async def run_blocking(func, *args, **kwargs):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
@@ -3333,12 +3328,17 @@ async def cmd_go(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 def main():
     print("=== MAIN ENTERED ===", flush=True)
+
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
-    # 🔥 гарантированно отключаем webhook
     asyncio.get_event_loop().run_until_complete(
         app.bot.delete_webhook(drop_pending_updates=True)
     )
+
+    async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("DEBUG UPDATE: %s", update)
+
+    app.add_handler(MessageHandler(filters.ALL, debug_all), group=999)
 
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
@@ -3347,9 +3347,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, on_message))
 
     log.info("Bot starting...")
-    app.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-    )
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":

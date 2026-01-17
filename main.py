@@ -2321,42 +2321,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         o for o in ORDERS.values()
         if o.status == ORDER_DONE and o.courier_tg_id == uid and o.completed_at
     ]
-
-    def is_today(o):
-        return o.completed_at.date() == today
-
-    def is_this_week(o):
-        d = o.completed_at.date()
-        return week_start <= d <= week_end
-
-    def is_this_month(o):
-        return o.completed_at.year == today.year and o.completed_at.month == today.month
-
-    def sum_price(items):
-        return sum(int(o.price_final or 0) for o in items)
-
-    today_items = [o for o in done if is_today(o)]
-    week_items  = [o for o in done if is_this_week(o)]
-    month_items = [o for o in done if is_this_month(o)]
-
-    total_done_platform = sum(1 for o in ORDERS.values() if o.status == ORDER_DONE)
-
-    text = (
-        
-        "📦 Заказы\n"
-        f"• Сегодня: {len(today_items)}\n"
-        f"• Эта неделя: {len(week_items)}\n"
-        f"• Этот месяц: {len(month_items)}\n\n"
-        "💰 Сумма\n"
-        f"• Сегодня: {sum_price(today_items):,} ₩\n"
-        f"• Эта неделя: {sum_price(week_items):,} ₩\n"
-        f"• Этот месяц: {sum_price(month_items):,} ₩\n\n"
-        f"🏆 Всего выполнено заказов на платформе: {total_done_platform}\n\n"
-        "💚 Спасибо за вашу работу"
-    )
-
-    await context.bot.send_message(chat_id=uid, text=text)
-
     # ===== HOME SCREENS =====
 
     if data == "courier:dashboard":

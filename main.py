@@ -195,6 +195,13 @@ UI_RESET_KEY = "ui_reset_in_progress"
 from telegram.error import BadRequest
 
 async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
+    
+    last_text = context.user_data.get("_ui_last_text")
+    if last_text == text:
+        log.info("UI_RENDER SKIP (same text)")
+        return
+    context.user_data["_ui_last_text"] = text
+    
     # 🔒 если идет reset — НИКТО не рисует UI
     if context.user_data.get(UI_RESET_KEY):
         log.info("UI_RENDER SKIPPED (reset in progress)")
@@ -1231,7 +1238,18 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[UI_RESET_KEY] = True
 
     # 💣 ПОЛНЫЙ СБРОС
-    context.user_data.clear()
+    # 🔒 блокируем ВСЕ входящие обработчики
+    context.user_data[UI_RESET_KEY] = True
+
+    # 💣 ручной сброс, БЕЗ clear()
+    context.user_data.pop(UI_MSG_ID_KEY, None)
+    context.user_data.pop("draft_order", None)
+    context.user_data.pop("awaiting_proof_order_id", None)
+
+    context.user_data[USER_ROLE_KEY] = ROLE_UNKNOWN
+    context.user_data[CLIENT_STATE_KEY] = C_NONE
+    context.user_data[COURIER_STATE_KEY] = K_NONE
+    context.user_data[USER_LOCATION_KEY] = ""
     init_user_defaults(context)
     context.user_data.pop(UI_MSG_ID_KEY, None)
 
@@ -3227,8 +3245,8 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-    # === FALLBACK: главный экран ===
-    await render_home_root(context, update.effective_chat.id)
+    # если мы здесь — просто игнорируем
+    log.info("MESSAGE IGNORED (no active FSM)")
     return
 
 

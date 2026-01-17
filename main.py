@@ -1237,25 +1237,30 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # 💣 ЖЕСТКИЙ СБРОС СЕССИИ
-    context.user_data.clear()
+    # 🔒 ЖЕСТКАЯ БЛОКИРОВКА
+    context.user_data[START_LOCK_KEY] = True
 
-    # 🧼 базовые значения
-    init_user_defaults(context)
+    try:
+        # 💣 ПОЛНЫЙ СБРОС СЕССИИ
+        context.user_data.clear()
 
-    # ❌ разрываем старый UI
-    context.user_data.pop(UI_MSG_ID_KEY, None)
+        # 🧼 базовые значения
+        init_user_defaults(context)
 
-    # ✅ всегда отправляем НОВОЕ сообщение
-    msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=HOME_TEXT,
-        reply_markup=kb_home_root()
-    )
+        # ❌ рвем старый UI
+        context.user_data.pop(UI_MSG_ID_KEY, None)
 
-    # 🔓 снимаем блок
-    context.user_data.pop(START_LOCK_KEY, None)
-    context.user_data[UI_MSG_ID_KEY] = msg.message_id
+        # ✅ ВСЕ UI ТОЛЬКО ЧЕРЕЗ ui_render
+        await ui_render(
+            context,
+            chat_id,
+            HOME_TEXT,
+            reply_markup=kb_home_root()
+        )
+
+    finally:
+        # 🔓 СНЯТИЕ БЛОКИРОВКИ
+        context.user_data.pop(START_LOCK_KEY, None)
 
     
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

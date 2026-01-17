@@ -196,6 +196,10 @@ from telegram.error import BadRequest
 
 async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
     
+    if context.user_data.get(UI_RESET_KEY) and text != HOME_TEXT:
+        log.info("UI_RENDER SKIPPED (reset in progress)")
+        return
+
     last_text = context.user_data.get("_ui_last_text")
     if last_text == text:
         log.info("UI_RENDER SKIP (same text)")
@@ -1234,14 +1238,10 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    # 🔒 БЛОКИРУЕМ ВСЕ UI
+    # 🔒 блокируем остальные апдейты
     context.user_data[UI_RESET_KEY] = True
 
-    # 💣 ПОЛНЫЙ СБРОС
-    # 🔒 блокируем ВСЕ входящие обработчики
-    context.user_data[UI_RESET_KEY] = True
-
-    # 💣 ручной сброс, БЕЗ clear()
+    # 💣 ручной сброс
     context.user_data.pop(UI_MSG_ID_KEY, None)
     context.user_data.pop("draft_order", None)
     context.user_data.pop("awaiting_proof_order_id", None)
@@ -1251,30 +1251,16 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[COURIER_STATE_KEY] = K_NONE
     context.user_data[USER_LOCATION_KEY] = ""
     init_user_defaults(context)
-    context.user_data.pop(UI_MSG_ID_KEY, None)
 
-    # ✅ ГАРАНТИРОВАННЫЙ ОДИН РЕНДЕР
-    await render_home_root(context, chat.id)
-
-    # 🔓 РАЗБЛОК
+    # 🔓 РАЗРЕШАЕМ UI ТОЛЬКО ДЛЯ /start
     context.user_data.pop(UI_RESET_KEY, None)
 
-    # 📝 логируем ПОСЛЕ
-    if SHEETS and user:
-        async def _log():
-            try:
-                SHEETS.log_visit(
-                    user_tg_id=user.id,
-                    username=user.username or "",
-                    role=ROLE_UNKNOWN,
-                    location="",
-                    event="START",
-                )
-                SHEETS.log_event(user.id, ROLE_UNKNOWN, "START_CMD")
-            except Exception as e:
-                log.warning("START log failed: %s", e)
+    # ✅ гарантированный рендер
+    await render_home_root(context, chat.id)
 
-        asyncio.create_task(_log())
+    # 📝 лог
+    if SHEETS and user:
+        asyncio.create_task(log_start(user))
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin(update.effective_user.id):

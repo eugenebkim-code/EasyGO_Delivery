@@ -206,6 +206,10 @@ from telegram.error import BadRequest
 async def ui_render(context, chat_id: int, text: str, reply_markup=None, **kwargs):
     msg_id = context.user_data.get(UI_MSG_ID_KEY)
 
+    if not isinstance(msg_id, int):
+        context.user_data.pop(UI_MSG_ID_KEY, None)
+        msg_id = None
+
     if context.user_data.get(START_LOCK_KEY):
         return
 
@@ -1249,6 +1253,8 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=kb_home_root()
     )
 
+    # 🔓 снимаем блок
+    context.user_data.pop(START_LOCK_KEY, None)
     context.user_data[UI_MSG_ID_KEY] = msg.message_id
 
     

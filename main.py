@@ -3302,22 +3302,6 @@ async def cmd_go(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await render_home_root(context, uid)
 
 
-async def run_bot_with_retry(app: Application):
-    while True:
-        try:
-            log.info("Starting polling loop")
-            await app.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True,
-                close_loop=False,
-            )
-        except Conflict:
-            log.warning("Polling conflict (409). Retrying in 5 seconds...")
-            await asyncio.sleep(5)
-        except Exception as e:
-            log.exception("Unexpected polling error")
-            await asyncio.sleep(5)
-
 # =========================
 # MAIN
 # =========================
@@ -3330,12 +3314,13 @@ def main():
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CommandHandler("go", cmd_go))
     app.add_handler(CallbackQueryHandler(on_callback))
-    app.add_handler(
-        MessageHandler(filters.TEXT | filters.PHOTO, on_message)
-    )
+    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, on_message))
 
     log.info("Bot starting...")
-    asyncio.run(run_bot_with_retry(app))
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+    )
 
 
 if __name__ == "__main__":

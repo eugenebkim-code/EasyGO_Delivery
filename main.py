@@ -739,9 +739,25 @@ def get_active_order_for_courier(courier_id: int) -> Optional["Order"]:
         ORDER_PICKED_UP,
         ORDER_DONE_PENDING,
     )
-    for o in ORDERS.values():
-        if o.courier_tg_id == courier_id and o.status in active_statuses:
-            return o
+
+    for oid, o in list(ORDERS.items()):
+        if o.courier_tg_id != courier_id:
+            continue
+        if o.status not in active_statuses:
+            continue
+
+        # 🔴 КРИТИЧНО: заказ должен существовать в Sheets
+        if SHEETS and oid not in SHEETS.order_row:
+            log.warning(
+                "STALE ORDER DETECTED | order_id=%s | courier=%s | removing from memory",
+                oid,
+                courier_id,
+            )
+            ORDERS.pop(oid, None)
+            continue
+
+        return o
+
     return None
 
 

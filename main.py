@@ -843,8 +843,7 @@ def kb_courier_menu_approved(courier_id: int):
     else:
         rows = [
             [InlineKeyboardButton("📋 Текущие заявки", callback_data="courier:orders")],
-            [InlineKeyboardButton("📊 Статистика", callback_data="courier:stats")]
-            [InlineKeyboardButton("📊 Мой дэш", callback_data="courier:dashboard")],
+            [InlineKeyboardButton("📊 Статистика", callback_data="courier:stats")],
         ]
 
     rows.append(
@@ -2317,18 +2316,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Сессия обновлена. Нажмите /start", show_alert=False)
         return
 
-    # ===== COURIER DASH =====
-
-    def _week_bounds(d: date):
-    start = d - timedelta(days=d.weekday())  # понедельник
-    end = start + timedelta(days=6)
-    return start, end
-
-async def show_courier_dashboard(context, uid: int):
-    now = datetime.now()
-    today = now.date()
-    week_start, week_end = _week_bounds(today)
-
     # фильтр выполненных заказов курьера
     done = [
         o for o in ORDERS.values()
@@ -2355,7 +2342,7 @@ async def show_courier_dashboard(context, uid: int):
     total_done_platform = sum(1 for o in ORDERS.values() if o.status == ORDER_DONE)
 
     text = (
-        "📊 Мой дэш (EasyGo)\n\n"
+        
         "📦 Заказы\n"
         f"• Сегодня: {len(today_items)}\n"
         f"• Эта неделя: {len(week_items)}\n"

@@ -1236,32 +1236,19 @@ import asyncio
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    user = update.effective_user
+    uid = update.effective_user.id
 
-    # 🔒 блокируем остальные апдейты
-    context.user_data[UI_RESET_KEY] = True
+    # 💣 ПОЛНЫЙ ЖЕСТКИЙ СБРОС СЕССИИ
+    context.user_data.clear()
 
-    # 💣 ручной сброс
-    context.user_data.pop(UI_MSG_ID_KEY, None)
-    context.user_data.pop("draft_order", None)
-    context.user_data.pop("awaiting_proof_order_id", None)
-
-    context.user_data[USER_ROLE_KEY] = ROLE_UNKNOWN
-    context.user_data[CLIENT_STATE_KEY] = C_NONE
-    context.user_data[COURIER_STATE_KEY] = K_NONE
-    context.user_data[USER_LOCATION_KEY] = ""
+    # 🔑 обязательные ключи
+    context.user_data[UI_MSG_ID_KEY] = None
     init_user_defaults(context)
 
-    # 🔓 РАЗРЕШАЕМ UI ТОЛЬКО ДЛЯ /start
-    context.user_data.pop(UI_RESET_KEY, None)
-
-    # ✅ гарантированный рендер
+    # 🏠 гарантированный стартовый экран
     await render_home_root(context, chat.id)
 
-    # 📝 лог
-    if SHEETS and user:
-        asyncio.create_task(log_start(user))
-
+    
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin(update.effective_user.id):
         return

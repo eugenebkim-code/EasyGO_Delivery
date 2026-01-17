@@ -1233,34 +1233,23 @@ import asyncio
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # 🔒 блокируем все остальные апдейты
+    # 💣 ЖЕСТКИЙ СБРОС СЕССИИ
     context.user_data.clear()
-    context.user_data[START_LOCK_KEY] = True
 
-    try:
-        msg = await context.bot.send_message(...)
-        context.user_data[UI_MSG_ID_KEY] = msg.message_id
-    finally:
-        context.user_data.pop(START_LOCK_KEY, None)
-
-    # ❌ полностью рвем старый UI
-    context.user_data.pop(UI_MSG_ID_KEY, None)
-
-    # 🧼 чистый старт
+    # 🧼 базовые значения
     init_user_defaults(context)
 
-    # ✅ РИСУЕМ ТОЛЬКО НОВОЕ СООБЩЕНИЕ
+    # ❌ разрываем старый UI
+    context.user_data.pop(UI_MSG_ID_KEY, None)
+
+    # ✅ всегда отправляем НОВОЕ сообщение
     msg = await context.bot.send_message(
         chat_id=chat_id,
         text=HOME_TEXT,
         reply_markup=kb_home_root()
     )
 
-    # сохраняем ТОЛЬКО этот msg_id
     context.user_data[UI_MSG_ID_KEY] = msg.message_id
-
-    # 🔓 снимаем блок
-    context.user_data.pop(START_LOCK_KEY, None)
 
     
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2267,6 +2256,8 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    query = update.callback_query
+
     if not query:
         return
 
@@ -2276,9 +2267,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get(UI_RESET_KEY):
         await query.answer("Обновление…")
         return
-
-    query = update.callback_query
-    
 
     await tg_retry(lambda: query.answer())
 

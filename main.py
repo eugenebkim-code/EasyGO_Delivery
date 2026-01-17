@@ -3321,19 +3321,7 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
-    app.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
-
-    async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        log.info("DEBUG UPDATE: %s", update)
-
-    app.add_handler(
-        MessageHandler(filters.TEXT | filters.PHOTO, debug_all),
-        group=999
-    )
-
+    # handlers — ДО запуска
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CommandHandler("go", cmd_go))
@@ -3341,7 +3329,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, on_message))
 
     log.info("Bot starting...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
 
 
 if __name__ == "__main__":

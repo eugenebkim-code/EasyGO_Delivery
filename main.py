@@ -1259,9 +1259,20 @@ def init_user_defaults(context: ContextTypes.DEFAULT_TYPE):
 import asyncio
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    uname = update.effective_user.username or ""
+
+    if SHEETS:
+        SHEETS.log_visit(
+            user_tg_id=uid,
+            username=uname,
+            role=ROLE_UNKNOWN,
+            location="",
+            event="START"
+        )
+
     chat_id = update.effective_chat.id
 
-    # 🔥 СРАЗУ отвечаем, без FSM
     await context.bot.send_message(
         chat_id=chat_id,
         text="⏳ Загружаю меню..."

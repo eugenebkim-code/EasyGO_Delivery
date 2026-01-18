@@ -815,6 +815,7 @@ def kb_client_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📝 Создать доставку", callback_data="client:new_order")],
         [InlineKeyboardButton("📦 Статус доставки", callback_data="client:status:open")],
+        [InlineKeyboardButton("📷 Мои заказы сегодня", callback_data="client:orders_today")],
         [InlineKeyboardButton("🔁 Сменить роль", callback_data="role:reset")],
     ])
 
@@ -2428,11 +2429,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=uid, text=text)
         return
         
-    query = update.callback_query
-
-    if not query:
-        return
-
     if context.user_data.get(START_LOCK_KEY):
         return
 
@@ -2727,7 +2723,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb_client_menu()
             )
             return
-
         can_cancel = (o.status == ORDER_NEW)
         await ui_render(
             context,
@@ -2737,6 +2732,43 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
       
+    if data == "client:orders_today":
+        items = get_client_orders(uid)
+        filtered = filter_orders_by_period(items, "today")
+
+        if not filtered:
+            await ui_render(
+                context,
+                uid,
+                "За сегодня у вас пока нет заказов.",
+                reply_markup=kb_client_menu()
+            )
+            return
+
+        # показываем список заказов
+        await ui_render(
+            context,
+            uid,
+            render_orders_list(filtered),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏠 Меню", callback_data="client:menu")]
+            ])
+        )
+
+        # отдельными сообщениями отправляем фото по выполненным заказам за сегодня
+        for o in filtered:
+            if o.status == ORDER_DONE and o.proof_image_file_id:
+                try:
+                    await tg_retry(lambda order=o: context.bot.send_photo(
+                        chat_id=uid,
+                        photo=order.proof_image_file_id,
+                        caption=f"Фото по заказу #{order.order_id}"
+                    ))
+                except Exception as e:
+                    log.warning("Client history photo send failed | order_id=%s | %s", o.order_id, e)
+
+        return
+
     if data.startswith("client:cancel:"):
         order_id = data.split(":", 2)[2]
         await handle_client_cancel(query, context, uid, order_id)

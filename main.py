@@ -1274,6 +1274,15 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await render_home_root(context, chat_id)
 
 async def restart_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if SHEETS:
+        SHEETS.log_visit(
+            user_tg_id=update.effective_user.id,
+            username=update.effective_user.username or "",
+            role=ROLE_UNKNOWN,
+            location="",
+            event="START"
+    )
+   
     uid = update.effective_user.id
 
     context.user_data.clear()
@@ -1281,6 +1290,16 @@ async def restart_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_user_defaults(context)
 
     await render_home_root(context, uid)
+    if SHEETS:
+        SHEETS.log_visit(
+            user_tg_id=uid,
+            username=update.effective_user.username or "",
+            role=context.user_data.get(USER_ROLE_KEY, ROLE_UNKNOWN),
+            location=context.user_data.get(USER_LOCATION_KEY, ""),
+            event="RESTART"
+        )
+
+
 
 async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id

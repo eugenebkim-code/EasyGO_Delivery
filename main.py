@@ -139,10 +139,26 @@ K_AWAITING_PROOF = "K_AWAITING_PROOF"
 # order status
 ORDER_NEW = "NEW"
 ORDER_TAKEN = "TAKEN"
+ORDER_EN_ROUTE = "EN_ROUTE"
+ORDER_PICKED_UP = "PICKED_UP"
 ORDER_DONE_PENDING = "DONE_PENDING_PROOF"
 ORDER_DONE = "DONE"
 ORDER_CANCELED = "CANCELED"
-ORDER_PROBLEM = "PROBLEM"  # адрес некорректен (проблемный заказ)
+ORDER_PROBLEM = "PROBLEM"
+
+ORDER_STATUS_RU = {
+    ORDER_NEW: "📝 Ищем курьера",
+    ORDER_TAKEN: "👤 Курьер назначен",
+    ORDER_EN_ROUTE: "🚚 В пути",
+    ORDER_PICKED_UP: "📦 Заказ на руках",
+    ORDER_DONE_PENDING: "⏳ Ожидается подтверждение",
+    ORDER_DONE: "✅ Доставлено",
+    ORDER_CANCELED: "❌ Отозвано",
+    ORDER_PROBLEM: "⚠️ Проблема с адресом",
+}
+
+def order_status_ru(o: Order) -> str:
+    return ORDER_STATUS_RU.get(o.status, o.status)
 
 # courier status
 COURIER_PENDING = "PENDING"
@@ -1093,24 +1109,6 @@ def _time_line(ttype: str, ttext: str) -> str:
     return ttext or "уточняется"
 
 
-def order_status_ru(o: Order) -> str:
-    if o.status == ORDER_NEW:
-        return "Ищем курьера"
-    if o.status == ORDER_TAKEN:
-        return "Курьер назначен"
-    if o.status == ORDER_EN_ROUTE:
-        return "В пути"
-    if o.status == ORDER_DONE_PENDING:
-        return "Ожидается подтверждение"
-    if o.status == ORDER_DONE:
-        return "Доставлено"
-    if o.status == ORDER_CANCELED:
-        return "Отозвано"
-    if o.status == ORDER_PROBLEM:
-        return "Проблема с адресом"
-    return o.status
-
-
 def render_order_summary_for_confirm(d: Dict[str, Any]) -> str:
     door = d.get("door_code", "") or "нет"
     dtype = _dtype_line(d.get("delivery_type", ""), d.get("delivery_type_other_text", ""))
@@ -1734,10 +1732,12 @@ def filter_orders_by_period(items: List[Order], period: str) -> List[Order]:
 def render_orders_list(items: List[Order], limit: int = 20) -> str:
     if not items:
         return "Нет заказов за выбранный период."
+
     lines = ["🧾 Ваши заказы:"]
     for o in items[:limit]:
-        st = order_status_ru(o)
-        lines.append(f"#{o.order_id} | {st} | {o.created_at} | {o.price_krw} вон")
+        lines.append(
+            f"#{o.order_id} | {order_status_ru(o.status)} | {o.completed_at} | {o.price_krw} вон"
+        )
     return "\n".join(lines)
 
 
@@ -3590,7 +3590,7 @@ async def cmd_go(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 def main():
     print("=== MAIN ENTERED ===", flush=True)
-
+    
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
     # handlers — ДО запуска

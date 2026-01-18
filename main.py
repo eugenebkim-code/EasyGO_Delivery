@@ -1273,11 +1273,6 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
 
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="⏳ Загружаю меню..."
-    )
-
     context.user_data.clear()
     context.user_data.pop(UI_MSG_ID_KEY, None)
     init_user_defaults(context)
@@ -2388,6 +2383,22 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    # 🔁 СМЕНА РОЛИ — должна работать ВСЕГДА
+    if data == "role:reset":
+        context.user_data.pop(UI_MSG_ID_KEY, None)
+
+        context.user_data[USER_ROLE_KEY] = ROLE_UNKNOWN
+        context.user_data[CLIENT_STATE_KEY] = C_NONE
+        context.user_data[COURIER_STATE_KEY] = K_NONE
+        context.user_data.pop("draft_order", None)
+        context.user_data.pop("awaiting_proof_order_id", None)
+
+        if SHEETS:
+            SHEETS.log_event(uid, ROLE_UNKNOWN, "ROLE_RESET")
+
+        await render_home_root(context, uid)
+        return
+    
     query = update.callback_query
     if not query:
         return
@@ -2584,21 +2595,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ui_render(context, uid, "👤 Кто вы?", reply_markup=kb_role())
         return
 
-    # 🔁 СМЕНА РОЛИ — должна работать ВСЕГДА
-    if data == "role:reset":
-        context.user_data.pop(UI_MSG_ID_KEY, None)
-
-        context.user_data[USER_ROLE_KEY] = ROLE_UNKNOWN
-        context.user_data[CLIENT_STATE_KEY] = C_NONE
-        context.user_data[COURIER_STATE_KEY] = K_NONE
-        context.user_data.pop("draft_order", None)
-        context.user_data.pop("awaiting_proof_order_id", None)
-
-        if SHEETS:
-            SHEETS.log_event(uid, ROLE_UNKNOWN, "ROLE_RESET")
-
-        await render_home_root(context, uid)
-        return
+    
 
     if data == "reset:hard":
         await handle_hard_reset(query, context)

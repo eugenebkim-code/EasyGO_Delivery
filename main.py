@@ -157,8 +157,8 @@ ORDER_STATUS_RU = {
     ORDER_PROBLEM: "⚠️ Проблема с адресом",
 }
 
-def order_status_ru(o: Order) -> str:
-    return ORDER_STATUS_RU.get(o.status, o.status)
+def order_status_ru(status: str) -> str:
+    return ORDER_STATUS_RU.get(status, status)
 
 # courier status
 COURIER_PENDING = "PENDING"
@@ -1161,7 +1161,7 @@ def render_client_status(o: Order) -> str:
     lines = []
     lines.append(f"📦 Статус заказа #{o.order_id}")
     lines.append("")
-    lines.append(f"Статус: {order_status_ru(o)}")
+    lines.append(f"Статус: {order_status_ru(o.status)}")
     lines.append(f"Цена: {o.price_krw} вон")
     lines.append("")
     lines.append("📍 Адрес забора:")

@@ -2392,6 +2392,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 🔁 СМЕНА РОЛИ — должна работать ВСЕГДА
     if data == "role:reset":
+        context.user_data.clear()
         context.user_data.pop(UI_MSG_ID_KEY, None)
 
         context.user_data[USER_ROLE_KEY] = ROLE_UNKNOWN

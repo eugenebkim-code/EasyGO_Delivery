@@ -2584,8 +2584,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ui_render(context, uid, "👤 Кто вы?", reply_markup=kb_role())
         return
 
+    # 🔁 СМЕНА РОЛИ — должна работать ВСЕГДА
     if data == "role:reset":
-        context.user_data.pop(UI_MSG_ID_KEY, None)  # ⬅️ разрыв UI-сессии
+        context.user_data.pop(UI_MSG_ID_KEY, None)
 
         context.user_data[USER_ROLE_KEY] = ROLE_UNKNOWN
         context.user_data[CLIENT_STATE_KEY] = C_NONE

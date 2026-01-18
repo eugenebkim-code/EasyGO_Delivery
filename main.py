@@ -2383,6 +2383,13 @@ async def handle_hard_reset(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
+    query = update.callback_query
+    if not query:
+        return
+
+    uid = query.from_user.id
+    data = query.data or ""
+    
     # 🔁 СМЕНА РОЛИ — должна работать ВСЕГДА
     if data == "role:reset":
         context.user_data.pop(UI_MSG_ID_KEY, None)
@@ -2399,13 +2406,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await render_home_root(context, uid)
         return
     
-    query = update.callback_query
-    if not query:
-        return
-
-    uid = query.from_user.id
-    data = query.data or ""
-
     # 📋 COPY HANDLER — СРАЗУ ПОСЛЕ data
     if data.startswith("copy:"):
         _, what, order_id = data.split(":", 2)

@@ -2436,12 +2436,36 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Обновление…")
         return
 
-    await tg_retry(lambda: query.answer())
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
     uid = query.from_user.id
     uname = query.from_user.username or ""
     current_role = context.user_data.get(USER_ROLE_KEY, ROLE_UNKNOWN)
     data = query.data or ""
+
+    # 📷 Фото доставки по кнопке (история заказов)
+    if data.startswith("client:photo:"):
+        order_id = data.split(":", 2)[2]
+        order = ORDERS.get(order_id)
+
+        if not order or order.client_tg_id != uid:
+            await query.answer("Фото недоступно", show_alert=True)
+            return
+
+        if not order.proof_image_file_id:
+            await query.answer("Фото еще нет", show_alert=True)
+            return
+
+        await tg_retry(lambda: context.bot.send_photo(
+            chat_id=uid,
+            photo=order.proof_image_file_id,
+            caption=f"📦 Заказ #{order.order_id}\nФото доставки"
+        ))
+        return
+
 
     # ===== COURIER ACTIONS — MUST BE BEFORE CLIENT FSM CHECK =====
 
@@ -2665,11 +2689,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if data.startswith("picked:"):
-        order_id = data.split(":", 1)[1]
-        await handle_picked_up(query, context, uid, order_id)
-        return
-
     # 🔄 ОБНОВЛЕНИЕ ЭКРАНА КУРЬЕРА
     if data == "courier_refresh":
         await show_current_orders_for_courier(context, uid)
@@ -2745,28 +2764,23 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        buttons = []
+        for o in filtered:
+            if o.status == ORDER_DONE and o.proof_image_file_id:
+                buttons.append([InlineKeyboardButton(
+                    f"📷 Фото доставки #{o.order_id}",
+                    callback_data=f"client:photo:{o.order_id}"
+                )])
+
+        buttons.append([InlineKeyboardButton("🏠 Меню", callback_data="client:menu")])
+
         # показываем список заказов
         await ui_render(
             context,
             uid,
             render_orders_list(filtered),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏠 Меню", callback_data="client:menu")]
-            ])
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
-
-        # отдельными сообщениями отправляем фото по выполненным заказам за сегодня
-        for o in filtered:
-            if o.status == ORDER_DONE and o.proof_image_file_id:
-                try:
-                    await tg_retry(lambda order=o: context.bot.send_photo(
-                        chat_id=uid,
-                        photo=order.proof_image_file_id,
-                        caption=f"Фото по заказу #{order.order_id}"
-                    ))
-                except Exception as e:
-                    log.warning("Client history photo send failed | order_id=%s | %s", o.order_id, e)
-
         return
 
     if data.startswith("client:cancel:"):
